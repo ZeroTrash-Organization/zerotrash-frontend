@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'package:zerotrash/Globals/localhost.dart';
+import 'package:intl/intl.dart';
 
 import 'CreateEvent.dart';
 
@@ -43,14 +45,50 @@ class eventItem {
 class _EventsState extends State<EventsPage> {
   // get user token from firebase
   late bool isOrganizer = false;
-
-  // use token to get user data and check whether user is a orginizer or a community_user
-  // if user is a orginizer, show create event button
+  List<eventItem> eventItems = [];
+  List<eventItem> eventItemsDummy = [
+    eventItem(
+      name: "Beach Cleanup",
+      location: "Galle Face",
+      time: "10:00 AM",
+      image:
+      "https://greenfins.net/wp-content/uploads/2020/08/beach-cleanup-3.jpeg",
+    ),
+    eventItem(
+      name: "River Cleanup",
+      location: "Kelaniya",
+      time: "11:00 AM",
+      image:
+      "https://www.ecowatch.com/wp-content/uploads/2022/07/GettyImages-1353301481-scaled.jpg",
+    ),
+    eventItem(
+      name: "Park Cleanup",
+      location: "Viharamahadevi Park",
+      time: "12:00 PM",
+      image:
+      "https://a.storyblok.com/f/146790/1600x842/7ac33a43f1/how-to-organize-a-beach-clean-up-0.png",
+    ),
+    eventItem(
+      name: "Beach Cleanup",
+      location: "Galle Face",
+      time: "10:00 AM",
+      image:
+      "https://www.jconnectseattle.org/wp-content/uploads/2021/08/beach-cleanup.jpg",
+    ),
+    eventItem(
+      name: "River Cleanup",
+      location: "Kelaniya",
+      time: "11:00 AM",
+      image:
+      "https://greenfins.net/wp-content/uploads/2020/08/beach-cleanup-3.jpeg",
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
     _checkOrganizer();
+    _loadEvents();
   }
 
   Future<void> _checkOrganizer() async {
@@ -71,46 +109,43 @@ class _EventsState extends State<EventsPage> {
       }
     }
   }
+  Future<void> _loadEvents() async {
+    try {
+      final List<eventItem> fetchedEvents = await _getEventsFromDB();
 
+      print(fetchedEvents);
+      setState(() {
+        eventItems = fetchedEvents;
+      });
+    } catch (error) {
+      print('Error loading events: $error');
+      // Handle error loading events
+    }
+  }
+
+  Future<List<eventItem>> _getEventsFromDB() async {
+    final response = await http.get(
+      Uri.parse('${Localhost.backend}:3000/event/getevents'),
+    );
+    print(response.statusCode);
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      print(data);
+      return data.map((e) {
+        return eventItem(
+          name: e['title'],
+          location: e['location'],
+          time: e['date'].toString().substring(0, 10),
+          image: e['imgUrl'],
+        );
+      }).toList();
+    } else {
+      throw Exception('Failed to load events');
+    }
+  }
   int index = 0;
 
-  List<eventItem> eventItems = [
-    eventItem(
-      name: "Beach Cleanup",
-      location: "Galle Face",
-      time: "10:00 AM",
-      image:
-          "https://greenfins.net/wp-content/uploads/2020/08/beach-cleanup-3.jpeg",
-    ),
-    eventItem(
-      name: "River Cleanup",
-      location: "Kelaniya",
-      time: "11:00 AM",
-      image:
-          "https://www.ecowatch.com/wp-content/uploads/2022/07/GettyImages-1353301481-scaled.jpg",
-    ),
-    eventItem(
-      name: "Park Cleanup",
-      location: "Viharamahadevi Park",
-      time: "12:00 PM",
-      image:
-          "https://a.storyblok.com/f/146790/1600x842/7ac33a43f1/how-to-organize-a-beach-clean-up-0.png",
-    ),
-    eventItem(
-      name: "Beach Cleanup",
-      location: "Galle Face",
-      time: "10:00 AM",
-      image:
-          "https://www.jconnectseattle.org/wp-content/uploads/2021/08/beach-cleanup.jpg",
-    ),
-    eventItem(
-      name: "River Cleanup",
-      location: "Kelaniya",
-      time: "11:00 AM",
-      image:
-          "https://greenfins.net/wp-content/uploads/2020/08/beach-cleanup-3.jpeg",
-    ),
-  ];
+
 
   Widget _title() {
     return Text(
@@ -331,4 +366,5 @@ class FillImageCard extends StatelessWidget {
       ),
     );
   }
+
 }

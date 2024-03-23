@@ -1,11 +1,18 @@
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:zerotrash/Screens/Register.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:zerotrash/Globals/localhost.dart';
+import 'package:zerotrash/Globals/utils.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../Globals/utils.dart';
+import 'LocationDialogBox.dart';
 
 class Photos extends StatelessWidget {
   const Photos({super.key});
@@ -24,22 +31,71 @@ class PhotosPage extends StatefulWidget {
 }
 
 class _PhotosState extends State<PhotosPage> {
-  Uint8List? _image;
-  bool isAnalyzed = true;
+  File? _image;
+  final picker = ImagePicker();
+  String? _prediction;
+  bool isAnalyzed = false;
 
-  void selectImage() async {
-    Uint8List img = await pickImage(ImageSource.gallery);
+  String? modelUrl = Localhost.model;
+  String? backend = Localhost.backend;
+
+  String? latitude;
+  String? longitude;
+
+  Future getImageFromCamera() async {
+    final pickedFile = await picker.pickImage(source: ImageSource.camera);
+
     setState(() {
-      _image = img;
+      if (pickedFile != null) {
+        _image = File(pickedFile.path);
+      } else {
+        print('No image selected.');
+      }
     });
   }
 
-  void takePicture() async {
-    Uint8List img = await pickImage(ImageSource.camera);
+  Future getImageFromGallery() async {
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
     setState(() {
-      _image = img;
+      if (pickedFile != null) {
+        _image = File(pickedFile.path);
+      } else {
+        print('No image selected.');
+      }
     });
   }
+
+  Future<void> analyzeImage() async {
+    if (_image == null) {
+      return;
+    }
+
+    String apiUrl = '$modelUrl:8000/analyze';
+
+    print(apiUrl);
+
+
+    var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
+    request.files.add(await http.MultipartFile.fromPath('file', _image!.path));
+
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    print(response.body);
+
+    // take 'category' from the response
+    // set the state of _prediction to the category
+    if (response.statusCode == 200) {
+      setState(() {
+        _prediction = jsonDecode(response.body)['category'];
+        isAnalyzed = true;
+      });
+    } else {
+      print('Failed to analyze image. Error: ${response.statusCode}');
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -52,23 +108,23 @@ class _PhotosState extends State<PhotosPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             // add a dummy image from network
-            Image.network(
-              'https://previews.123rf.com/images/vovashevchuk/vovashevchuk1512/vovashevchuk151200064/50242222-rusty-metal-garbage-dump-as-a-texture.jpg',
-              width: 300,
-              height: 300,
-              fit: BoxFit.cover,
-            ),
-            SizedBox(height: 20),
-            // Header text
+            // Image.network(
+            //   'https://previews.123rf.com/images/vovashevchuk/vovashevchuk1512/vovashevchuk151200064/50242222-rusty-metal-garbage-dump-as-a-texture.jpg',
+            //   width: 300,
+            //   height: 300,
+            //   fit: BoxFit.cover,
+            // ),
+            // SizedBox(height: 20),
+            // // Header text
             Text(
-              "Category: ${isAnalyzed ? 'Metal' : 'Metal'}",
+              'Select an image to analyze',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             // Display the image in a square container with padding only if an image is selected
             if (_image != null)
               Container(
                 padding: const EdgeInsets.all(8.0),
-                child: Image.memory(
+                child: Image.file(
                   _image!,
                   width: 300,
                   height: 300,
@@ -77,6 +133,10 @@ class _PhotosState extends State<PhotosPage> {
               ),
 
             SizedBox(height: 20),
+            Text(
+              'Prediction: $_prediction',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             // Display a button to analyze the image
             ElevatedButton(
               onPressed: _image != null
@@ -90,7 +150,8 @@ class _PhotosState extends State<PhotosPage> {
             ElevatedButton(
               onPressed: isAnalyzed
                   ? () {
-                      // Add your onPressed code here!
+
+                _storeinDB(_prediction);
                     }
                   : null,
               child: const Text('Save to Database'),
@@ -135,7 +196,7 @@ class _PhotosState extends State<PhotosPage> {
                   child: const Text('Camera'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    takePicture();
+                    getImageFromCamera();
                   },
                 ),
                 const Padding(padding: EdgeInsets.all(8.0)),
@@ -143,7 +204,7 @@ class _PhotosState extends State<PhotosPage> {
                   child: const Text('Gallery'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    selectImage();
+                    getImageFromGallery();
                   },
                 ),
               ],
@@ -154,10 +215,58 @@ class _PhotosState extends State<PhotosPage> {
     );
   }
 
-  void analyzeImage() {
-    // Add your analyze image code here!
-    setState(() {
-      isAnalyzed = true;
-    });
+  // {
+  //   "imageId": "create hash with userid and time",
+  //   "category": "metal",
+  //   "latitude": 40.71258,
+  //   "longitude": -74.0060,
+  //   "date": "2024-04-19"
+  // }
+
+  void _storeinDB(String? category) async {
+    if (category == null) {
+      return;
+    }
+
+    String? userId = FirebaseAuth.instance.currentUser!.uid;
+    String? token = await FirebaseAuth.instance.currentUser!.getIdToken();
+
+    if (userId == null || token == null) {
+      return;
+    }
+
+    String apiUrl = '$backend:3000/saveimage';
+
+    var response = await http.post(
+      Uri.parse(apiUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'imageId': generateImageId(userId),
+        'category': category,
+        'latitude': 40.71258,
+        'longitude': -74.0060,
+        'date': '2024-04-19',
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      print('Image stored in database');
+    } else {
+      print('Failed to store image in database. Error: ${response.statusCode}');
+    }
   }
+
+  String generateImageId(String userId) {
+    String imageId = '$userId${DateTime.now().millisecondsSinceEpoch}';
+    print(imageId);
+    return imageId;
+  }
+
+
+
+
+
 }

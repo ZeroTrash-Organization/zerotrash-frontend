@@ -9,7 +9,7 @@ class Localhost {
   static const String localhost = 'http://192.168.8.134';
 
   static const String backend = 'http://192.168.8.134';
-  static const String model = 'http://192.168.8.134';
+  static const String model = 'http://13.201.76.187';
 
 // Mobile Hotspot
 //   static const String localhost = 'http://192.168.165.71';

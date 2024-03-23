@@ -8,10 +8,6 @@ import 'package:zerotrash/Globals/localhost.dart';
 import 'package:zerotrash/Screens/Photos.dart';
 import 'package:zerotrash/Screens/UserProfile.dart';
 import 'package:provider/provider.dart';
-
-import '../models/PatientModel.dart';
-import '../models/PatientModelProvider.dart';
-import '../models/userModel.dart';
 import 'Events.dart';
 import 'HeatMap.dart';
 import 'LeaderBoard2.dart';

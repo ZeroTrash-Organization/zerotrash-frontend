@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:zerotrash/Screens/AuthScreen.dart';
 import 'package:zerotrash/Screens/Dashboard.dart';
 import 'package:provider/provider.dart';
-import 'models/PatientModelProvider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,9 +17,7 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<PatientModelProvider>(
-      create: (context) => PatientModelProvider(),
-      child: MaterialApp(
+    return MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Flutter Demo',
         home: StreamBuilder<User?>(
@@ -34,7 +31,6 @@ class MyApp extends StatelessWidget {
             }
           },
         ),
-      ),
     );
   }
 }
