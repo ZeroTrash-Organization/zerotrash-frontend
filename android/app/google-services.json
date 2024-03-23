@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "173189429584",
+    "project_id": "zerotrash-d6478",
+    "storage_bucket": "zerotrash-d6478.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:173189429584:android:4a31d58678658429acd455",
+        "android_client_info": {
+          "package_name": "com.example.zerotrash"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6Ye5nPjGewSGDQmpsm2HDduEa7icosuQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
