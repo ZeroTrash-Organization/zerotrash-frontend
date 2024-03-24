@@ -1,18 +1,12 @@
-
 import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:zerotrash/Screens/Register.dart';
 import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'package:zerotrash/Globals/localhost.dart';
-import 'package:zerotrash/Globals/utils.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-import '../Globals/utils.dart';
-import 'LocationDialogBox.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:zerotrash/Globals/localhost.dart';
 
 class Photos extends StatelessWidget {
   const Photos({super.key});
@@ -35,6 +29,8 @@ class _PhotosState extends State<PhotosPage> {
   final picker = ImagePicker();
   String? _prediction;
   bool isAnalyzed = false;
+  bool isLocationFetched = false;
+  bool isImageUploaded = false;
 
   String? modelUrl = Localhost.model;
   String? backend = Localhost.backend;
@@ -75,7 +71,6 @@ class _PhotosState extends State<PhotosPage> {
 
     print(apiUrl);
 
-
     var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
     request.files.add(await http.MultipartFile.fromPath('file', _image!.path));
 
@@ -96,6 +91,41 @@ class _PhotosState extends State<PhotosPage> {
     }
   }
 
+  Future<Position?> _getCurrentLocation() async {
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        // Open location settings if services are disabled
+        await Geolocator.openLocationSettings();
+      }
+
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        // Request location permission if not granted
+        permission = await Geolocator.requestPermission();
+        if (permission != LocationPermission.whileInUse &&
+            permission != LocationPermission.always) {
+          // Open location settings if permission is permanently denied
+          await Geolocator.openLocationSettings();
+        }
+      }
+
+      // If permission is denied forever, return error
+      if (permission == LocationPermission.deniedForever) {
+        return Future.error(
+            'Location permissions are permanently denied, we cannot request permissions.');
+      }
+
+      // Get current position
+      return await Geolocator.getCurrentPosition();
+    } catch (e) {
+      // Handle any exceptions that might occur
+      print('Error getting current location: $e');
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,20 +137,10 @@ class _PhotosState extends State<PhotosPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            // add a dummy image from network
-            // Image.network(
-            //   'https://previews.123rf.com/images/vovashevchuk/vovashevchuk1512/vovashevchuk151200064/50242222-rusty-metal-garbage-dump-as-a-texture.jpg',
-            //   width: 300,
-            //   height: 300,
-            //   fit: BoxFit.cover,
-            // ),
-            // SizedBox(height: 20),
-            // // Header text
             Text(
               'Select an image to analyze',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            // Display the image in a square container with padding only if an image is selected
             if (_image != null)
               Container(
                 padding: const EdgeInsets.all(8.0),
@@ -137,34 +157,59 @@ class _PhotosState extends State<PhotosPage> {
               'Prediction: $_prediction',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            // Display a button to analyze the image
             ElevatedButton(
-              onPressed: _image != null
+              onPressed: _image != null && !isAnalyzed
                   ? () {
-                      analyzeImage();
-                    }
+                analyzeImage();
+              }
                   : null,
               child: const Text('Analyze Image'),
             ),
-            // display upload to server button if image is analyzed,otherwise disable it
-            ElevatedButton(
-              onPressed: isAnalyzed
-                  ? () {
+            SizedBox(height: 20),
 
+            Text(
+              'Latitude: $latitude',
+            ),
+            SizedBox(width: 20),
+            Text(
+              'Longitude: $longitude',
+            ),
+
+            ElevatedButton(
+              onPressed: isAnalyzed && !isLocationFetched
+                  ? () {
+                _getCurrentLocation().then((value) => {
+                  setState(() {
+                    latitude = value!.latitude.toString();
+                    longitude = value.longitude.toString();
+                    isLocationFetched = true;
+                  })
+                });
+              }
+                  : null,
+              child: const Text('Get Location'),
+            ),
+            ElevatedButton(
+              onPressed: isAnalyzed && isLocationFetched && !isImageUploaded
+                  ? () {
                 _storeinDB(_prediction);
-                    }
+              }
                   : null,
               child: const Text('Save to Database'),
             ),
-            // discard the image and start over
             ElevatedButton(
-              onPressed: _image != null
+              onPressed: _image != null && isAnalyzed && isLocationFetched
                   ? () {
-                      setState(() {
-                        _image = null;
-                        isAnalyzed = false;
-                      });
-                    }
+                setState(() {
+                  _image = null;
+                  isAnalyzed = false;
+                  isLocationFetched = false;
+                  isImageUploaded = false;
+                  latitude = null;
+                  longitude = null;
+                  _prediction = null;
+                });
+              }
                   : null,
               child: const Text('Discard Image'),
             ),
@@ -246,14 +291,15 @@ class _PhotosState extends State<PhotosPage> {
       body: jsonEncode({
         'imageId': generateImageId(userId),
         'category': category,
-        'latitude': 40.71258,
-        'longitude': -74.0060,
-        'date': '2024-04-19',
+        'latitude': latitude,
+        'longitude': longitude,
+        'date': DateTime.now().toString().substring(0, 10),
       }),
     );
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == 200 || response.statusCode == 201) {
       print('Image stored in database');
+      _updateUserPoints();
     } else {
       print('Failed to store image in database. Error: ${response.statusCode}');
     }
@@ -265,8 +311,31 @@ class _PhotosState extends State<PhotosPage> {
     return imageId;
   }
 
+  Future<void> _updateUserPoints() async {
+    String? token = await FirebaseAuth.instance.currentUser!.getIdToken();
+    String? userId = FirebaseAuth.instance.currentUser!.uid;
 
+    if (token == null || userId == null) {
+      return;
+    }
 
+    String apiUrl = '$backend:3000/user/addpoints';
 
+    var response = await http.put(
+      Uri.parse(apiUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'points': 10,
+      }),
+    );
 
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      print('User points updated');
+    } else {
+      print('Failed to update user points. Error: ${response.statusCode}');
+    }
+  }
 }

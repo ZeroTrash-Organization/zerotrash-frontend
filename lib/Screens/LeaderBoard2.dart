@@ -1,5 +1,12 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
+
+import '../Globals/localhost.dart';
 
 class Leaderboard extends StatelessWidget {
   const Leaderboard({super.key});
@@ -19,39 +26,58 @@ class LeaderboardPage extends StatefulWidget {
 }
 
 class _LeaderboardState extends State<LeaderboardPage> {
+  List<String> userAvatars =[
+    "https://uxwing.com/wp-content/themes/uxwing/download/peoples-avatars/man-user-circle-icon.png",
+    "https://cdn-icons-png.freepik.com/512/4128/4128349.png",
+    "https://uxwing.com/wp-content/themes/uxwing/download/peoples-avatars/woman-user-circle-icon.png",
+  "https://cdn.esquimaltmfrc.com/wp-content/uploads/2015/09/flat-faces-icons-circle-woman-3.png"];
 
-  List<userItem> userItems = [
-    userItem(
-      rank: "1",
-      image: "https://static.dc.com/dc/files/default_images/Char_Profile_Batman_20190116_5c3fc4b40faec2.47318964.jpg",
-      name: "Johnny Rios",
-      point: 23131,
-    ),
-    userItem(
-      rank: "2",
-      image: "https://static.dc.com/dc/files/default_images/Char_Profile_Batman_20190116_5c3fc4b40faec2.47318964.jpg",
-      name: "Hodges",
-      point: 12323,
-    ),
-    userItem(
-      rank: "3",
-      image: "https://static.dc.com/dc/files/default_images/Char_Profile_Batman_20190116_5c3fc4b40faec2.47318964.jpg",
-      name: "loram",
-      point: 6343,
-    ),
-    userItem(
-      rank: "4",
-      image: "https://static.dc.com/dc/files/default_images/Char_Profile_Batman_20190116_5c3fc4b40faec2.47318964.jpg",
-      name: "Hodges",
-      point: 12323,
-    ),
-    userItem(
-      rank: "5",
-      image: "https://static.dc.com/dc/files/default_images/Char_Profile_Batman_20190116_5c3fc4b40faec2.47318964.jpg",
-      name: "loram",
-      point: 6343,
-    ),
+
+  late List<userItem> userItems = [
   ];
+
+  @override
+  void initState() {
+    _loadLeaderboard();
+    super.initState();
+  }
+
+  Future<void> _loadLeaderboard() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final token = await user.getIdToken();
+
+      final userDataResponse = await http.get(
+        Uri.parse('${Localhost.backend}:3000/leaderboard'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print(userDataResponse.body);
+
+      if (userDataResponse.statusCode == 200) {
+        // parse the response into a list of userItems
+        final List<dynamic> data = jsonDecode(userDataResponse.body);
+        List<userItem> loadedUserItems = data.map((e) => userItem(
+          rank: e['rank'].toString() ?? "",
+          name: e['username'] ?? "",
+          points: e['points'] != null ? e['points'].toString() : "",
+        )).toList();
+
+        setState(() {
+          userItems = loadedUserItems;
+        });
+
+        print("Leaderboard data loaded");
+        print(userItems.first);
+      } else {
+        print("Failed to load leaderboard data");
+      }
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +85,7 @@ class _LeaderboardState extends State<LeaderboardPage> {
       body: Stack(
         children: [
           SizedBox(
-              height: 100.0
+            height: 100.0,
           ),
           Align(
             alignment: Alignment.bottomCenter,
@@ -73,10 +99,14 @@ class _LeaderboardState extends State<LeaderboardPage> {
                   topLeft: Radius.circular(20),
                 ),
               ),
-              child: ListView.builder(
+              child: userItems.isEmpty
+                  ? Center(
+                child: CircularProgressIndicator(), // Show circular progress indicator while loading
+              )
+                  : ListView.builder(
                   shrinkWrap: true,
                   physics: const BouncingScrollPhysics(),
-                  itemCount: 5,
+                  itemCount: userItems.length,
                   itemBuilder: (context, index) {
                     final items = userItems[index];
                     return Padding(
@@ -85,7 +115,7 @@ class _LeaderboardState extends State<LeaderboardPage> {
                       child: Row(
                         children: [
                           Text(
-                            items.rank,
+                            (index + 1).toString(), // Display index + 1 as rank
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -96,7 +126,9 @@ class _LeaderboardState extends State<LeaderboardPage> {
                           ),
                           CircleAvatar(
                             radius: 25,
-                            backgroundImage: AssetImage(items.image),
+                            backgroundImage: NetworkImage(
+                                userAvatars[Random()
+                                    .nextInt(userAvatars.length)]),
                           ),
                           const SizedBox(
                             width: 15,
@@ -124,14 +156,15 @@ class _LeaderboardState extends State<LeaderboardPage> {
                                   quarterTurns: 1,
                                   child: Icon(
                                     Icons.back_hand,
-                                    color: Color.fromARGB(255, 255, 187, 0),
+                                    color:
+                                    Color.fromARGB(255, 255, 187, 0),
                                   ),
                                 ),
                                 const SizedBox(
                                   width: 5,
                                 ),
                                 Text(
-                                  items.point.toString(),
+                                  items.points,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 10,
@@ -157,54 +190,50 @@ class _LeaderboardState extends State<LeaderboardPage> {
               ),
             ),
           ),
-          const Positioned(
-            top: 120,
-            left: 10,
-            child: Text(
-              "Ens in 2d 23Hours",
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
           // Rank 1st
           Positioned(
             top: 140,
             right: 165,
             child: rank(
-                radius: 45.0,
-                height: 25,
-                image: "Images/g.jpeg",
-                name: "Johnny Rios",
-                point: "23131"),
+              radius: 45.0,
+              height: 25,
+              image:
+              "https://www.pngitem.com/pimgs/m/101-1011777_clip-art-1st-place-medal-clipart-hd-png.png",
+              name: userItems.isEmpty ? '' : userItems[0].name,
+              point: userItems.isEmpty ? '' : userItems[0].points,
+            ),
           ),
           // for rank 2nd
           Positioned(
             top: 240,
             left: 45,
             child: rank(
-                radius: 30.0,
-                height: 10,
-                image: "Images/k.jpeg",
-                name: "Hodges",
-                point: "12323"),
+              radius: 30.0,
+              height: 10,
+              image:
+              "https://i.pinimg.com/originals/3a/8d/bc/3a8dbc67fd6e3c7e2d64b2de2d176b6a.png",
+              name: userItems.length < 2 ? '' : userItems[1].name,
+              point: userItems.length < 2 ? '' : userItems[1].points,
+            ),
           ),
           // For 3rd rank
           Positioned(
             top: 263,
             right: 50,
             child: rank(
-                radius: 30.0,
-                height: 10,
-                image: "Images/j.jpeg",
-                name: "loram",
-                point: "6343"),
+              radius: 30.0,
+              height: 10,
+              image:
+              "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQP-0B9-C7gmqhmpAXDHO_uOF40EYz2bgrosnQzNNXrvX8uncRJfIslibXP1NBnAylCq-Q&usqp=CAU",
+              name: userItems.length < 3 ? '' : userItems[2].name,
+              point: userItems.length < 3 ? '' : userItems[2].points,
+            ),
           ),
         ],
       ),
     );
   }
+
 
   Column rank({
     required double radius,
@@ -217,7 +246,7 @@ class _LeaderboardState extends State<LeaderboardPage> {
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundImage: AssetImage(image),
+          backgroundImage: NetworkImage(image),
         ),
         SizedBox(
           height: height,
@@ -226,26 +255,15 @@ class _LeaderboardState extends State<LeaderboardPage> {
           name,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        SizedBox(
-          height: height,
-        ),
         Container(
           height: 25,
           width: 70,
           decoration: BoxDecoration(
               color: Colors.black54, borderRadius: BorderRadius.circular(50)),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(
-                width: 5,
-              ),
-              const Icon(
-                Icons.back_hand,
-                color: Color.fromARGB(255, 255, 187, 0),
-              ),
-              const SizedBox(
-                width: 5,
-              ),
               Text(
                 point,
                 style: const TextStyle(
@@ -263,14 +281,12 @@ class _LeaderboardState extends State<LeaderboardPage> {
 
 class userItem {
   final String rank;
-  final String image;
   final String name;
-  final int point;
+  final String points;
 
   userItem({
     required this.rank,
-    required this.image,
     required this.name,
-    required this.point,
+    required this.points,
   });
 }
