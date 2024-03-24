@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:zerotrash/Globals/localhost.dart';
 
+import 'AuthScreen.dart';
+
 class UserProfile extends StatelessWidget {
   const UserProfile({Key? key}) : super(key: key);
 
@@ -19,20 +21,6 @@ class UserProfilePage extends StatefulWidget {
 
   @override
   State<UserProfilePage> createState() => _UserProfileState();
-}
-
-class userModel {
-  final String name;
-  final String email;
-  final int points;
-  final String rank;
-
-  userModel({
-    required this.name,
-    required this.email,
-    required this.points,
-    required this.rank,
-  });
 }
 
 class _UserProfileState extends State<UserProfilePage> {
@@ -99,21 +87,35 @@ class _UserProfileState extends State<UserProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('User Profile'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            SizedBox(height: 16),
-            if (name != null) Text('Name: $name'),
-            if (email != null) Text('Email: $email'),
-            if (points != null) Text('Points: $points'),
-            if (rank != null) Text('Rank: $rank'),
-          ],
+        appBar: AppBar(
+          title: const Text('User Profile'),
         ),
-      ),
-    );
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              SizedBox(height: 16),
+              if (name != null) Text('Name: $name'),
+              if (email != null) Text('Email: $email'),
+              if (points != null) Text('Points: $points'),
+              if (rank != null) Text('Rank: $rank'),
+
+              // logout button
+              ElevatedButton(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => AuthScreen()),
+                    (route) =>
+                        false, // This prevents going back to the previous screen
+                  );
+                },
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+        ));
   }
 }
